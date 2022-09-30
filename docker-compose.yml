@@ -6,7 +6,7 @@ x-env: &default-env
   DB_NAME: opentracing
   DB_USER: opentracing
   DB_PASSWORD: opentracing
-  JAEGER_HOST: jaeger
+  JAEGER_COLLECTOR_HOST: "http://jaeger:14268"
 
 networks:
   internal:

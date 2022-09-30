@@ -12,10 +12,12 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
+	gormopentracing "gorm.io/plugin/opentracing"
 
 	"opentracing-playground/database"
 	"opentracing-playground/logging"
 	"opentracing-playground/models/user"
+	"opentracing-playground/pkg/jaeger"
 )
 
 // Server is a HTTP server.
@@ -97,6 +99,12 @@ func (s *Server) RegisterEndpoint(r *gin.Engine) {
 		}
 
 		db := database.GetDB(database.Default)
+		// if err := db.Use(gormopentracing.New()); err != nil {
+		// 	logging.Get().Error(err)
+		// 	ctx.JSON(http.StatusInternalServerError, nil)
+		// 	return
+		// }
+
 		if err := db.Create(&newUser).Error; err != nil {
 			logging.Get().Error(err)
 			ctx.JSON(http.StatusInternalServerError, nil)
@@ -109,6 +117,15 @@ func (s *Server) RegisterEndpoint(r *gin.Engine) {
 
 // Start starts HTTP server.
 func (s *Server) Start(ctx context.Context, apiAddr string) {
+	if err := jaeger.InitGlobalTracer("downstream"); err != nil {
+		log.Fatal("jaeger.InitGlobalTracer: ", err)
+	}
+
+	db := database.GetDB(database.Default)
+	if err := db.Use(gormopentracing.New()); err != nil {
+		log.Fatal("use gorm opentracing: ", err)
+	}
+
 	gin.ForceConsoleColor()
 
 	// setup gin.
