@@ -1,0 +1,120 @@
+version: "3.4"
+
+x-env: &default-env
+  DB_DIALECT: postgres
+  DB_PORT: 5432
+  DB_NAME: opentracing
+  DB_USER: opentracing
+  DB_PASSWORD: opentracing
+  JAEGER_HOST: jaeger
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+
+services:
+  upstream-database:
+    restart: always
+    image: postgres:12
+    shm_size: 4g
+    environment:
+      POSTGRES_USER: opentracing
+      POSTGRES_DB: opentracing
+      POSTGRES_PASSWORD: opentracing
+    volumes:
+      - /opt/upstream-pg:/var/lib/postgresql/data
+    networks:
+      internal:
+        aliases:
+          - upstream-database
+
+  downstream-database:
+    restart: always
+    image: postgres:12
+    shm_size: 4g
+    environment:
+      POSTGRES_USER: opentracing
+      POSTGRES_DB: opentracing
+      POSTGRES_PASSWORD: opentracing
+    volumes:
+      - /opt/downstream-pg:/var/lib/postgresql/data
+    networks:
+      internal:
+        aliases:
+          - downstream-database
+
+  jaeger:
+    restart: always
+    image: jaegertracing/all-in-one:1.38
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: 9411
+    ports:
+      - 5775:5775/udp
+      - 6831:6831/udp
+      - 6832:6832/udp
+      - 5778:5778
+      - 16686:16686
+      - 14268:14268
+      - 14250:14250
+      - 9411:9411
+    networks:
+      internal:
+        aliases:
+          - jaeger
+
+  adminer:
+    image: adminer
+    restart: always
+    environment:
+      ADMINER_PLUGINS: "json-column"
+    ports:
+      - 20080:8080
+    networks:
+      - internal
+
+  upstream:
+    restart: always
+    image: upstream:latest
+    environment:
+      DB_HOST: upstream-database
+      <<: *default-env
+    ports:
+      - 20081:8787
+    depends_on:
+      - upstream.dbmigration    
+    networks:
+      internal:
+        aliases:
+          - upstream
+
+  downstream:
+    restart: always
+    image: downstream:latest
+    environment:
+      DB_HOST: downstream-database
+      <<: *default-env
+    ports:
+      - 20082:8787
+    depends_on:
+      - downstream.dbmigration    
+    networks:
+      - internal
+
+  upstream.dbmigration:
+    image: upstream.dbmigration:latest
+    environment:
+      DB_HOST: upstream-database
+      <<: *default-env
+    networks:
+      - internal
+
+  downstream.dbmigration:
+    image: downstream.dbmigration:latest
+    environment:
+      DB_HOST: downstream-database
+      <<: *default-env
+    networks:
+      - internal
